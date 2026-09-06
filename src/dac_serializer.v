@@ -1,8 +1,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 // dac_serializer.v
 // Shifts an 8-bit DAC code out serially (MSB-first) with SCLK/MOSI/CS.
-// Rewritten to use a real shift register (fixes an off-by-one bit-skip bug
-// found in the counter-indexed version during cocotb testing).
+// shift_reg is driven from a single always block (synthesis requires this -
+// Icarus simulation tolerated two separate blocks assigning it, but Yosys
+// correctly rejects that as multiple conflicting drivers).
 ///////////////////////////////////////////////////////////////////////////////
 
 module dac_serializer (
@@ -76,7 +77,6 @@ module dac_serializer (
 
             if (start && ready) begin
                 ready          <= 1'b0;
-                shift_reg      <= data_in;
                 clk_edges_left <= 5'd16;   // 8 bits x 2 edges/bit
             end
             else if (clk_edges_left > 0) begin
@@ -96,14 +96,18 @@ module dac_serializer (
     end
 
     // ------------------------------------------------------------
-    // Shift out MOSI: shift left on every trailing edge
+    // Shift register: single process, driven by both load and shift
+    // conditions (merged here so synthesis sees exactly one driver)
     // ------------------------------------------------------------
     always @(posedge clk or negedge rst_n) begin
         if (~rst_n) begin
             shift_reg <= 8'h00;
         end
+        else if (start && ready) begin
+            shift_reg <= data_in;        // load new byte
+        end
         else if (trailing_edge) begin
-            shift_reg <= {shift_reg[6:0], 1'b0};
+            shift_reg <= {shift_reg[6:0], 1'b0};   // shift left
         end
     end
 
