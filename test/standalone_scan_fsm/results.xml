@@ -1,0 +1,11 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1788097373" />
+    <testcase name="test_reset_goes_to_idle" classname="test_scan_fsm" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm/test_scan_fsm.py" lineno="44" time="0.002931356430053711" sim_time_ns="60.0" ratio_time="20468.339975599836" />
+    <testcase name="test_immediate_lock_loops_back_for_next_channel" classname="test_scan_fsm" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm/test_scan_fsm.py" lineno="53" time="0.002118349075317383" sim_time_ns="190.0" ratio_time="89692.48846370287" />
+    <testcase name="test_full_scan_all_four_channels_reaches_done" classname="test_scan_fsm" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm/test_scan_fsm.py" lineno="72" time="0.006069183349609375" sim_time_ns="499.99999999999994" ratio_time="82383.40666247642" />
+    <testcase name="test_retry_then_lock" classname="test_scan_fsm" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm/test_scan_fsm.py" lineno="96" time="0.004498481750488281" sim_time_ns="270.0" ratio_time="60020.25015899936" />
+    <testcase name="test_never_locks_does_not_stall" classname="test_scan_fsm" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm/test_scan_fsm.py" lineno="130" time="0.002672910690307617" sim_time_ns="179.9999999999999" ratio_time="67342.31736687178" />
+    <testcase name="test_reset_mid_scan" classname="test_scan_fsm" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm/test_scan_fsm.py" lineno="153" time="0.0024712085723876953" sim_time_ns="140.0" ratio_time="56652.44187168355" />
+  </testsuite>
+</testsuites>

@@ -1,0 +1,9 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1787598453" />
+    <testcase name="test_config_load_basic" classname="test_config_loader" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_config_loader/test_config_loader.py" lineno="40" time="0.004395484924316406" sim_time_ns="310.0" ratio_time="70526.91690171404" />
+    <testcase name="test_cfg_done_pulses_once" classname="test_config_loader" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_config_loader/test_config_loader.py" lineno="57" time="0.004203081130981445" sim_time_ns="330.0" ratio_time="78513.83062000113" />
+    <testcase name="test_reset_clears_outputs" classname="test_config_loader" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_config_loader/test_config_loader.py" lineno="82" time="0.003999948501586914" sim_time_ns="390.0" ratio_time="97501.25528998033" />
+    <testcase name="test_two_consecutive_loads" classname="test_config_loader" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_config_loader/test_config_loader.py" lineno="98" time="0.004792451858520508" sim_time_ns="570.0" ratio_time="118937.03198845829" />
+  </testsuite>
+</testsuites>

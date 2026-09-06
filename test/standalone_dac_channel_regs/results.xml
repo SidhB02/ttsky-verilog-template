@@ -1,0 +1,10 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1787598178" />
+    <testcase name="test_reset_clears_all_channels" classname="test_dac_channel_regs" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_dac_channel_regs/test_dac_channel_regs.py" lineno="54" time="0.0022172927856445312" sim_time_ns="100.0" ratio_time="45100.04301075269" />
+    <testcase name="test_code_write_and_channel_isolation" classname="test_dac_channel_regs" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_dac_channel_regs/test_dac_channel_regs.py" lineno="68" time="0.0030486583709716797" sim_time_ns="189.99999999999997" ratio_time="62322.49628528974" />
+    <testcase name="test_lock_flag_write_and_isolation" classname="test_dac_channel_regs" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_dac_channel_regs/test_dac_channel_regs.py" lineno="86" time="0.0015642642974853516" sim_time_ns="150.0" ratio_time="95891.72382258801" />
+    <testcase name="test_retry_counter_increment" classname="test_dac_channel_regs" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_dac_channel_regs/test_dac_channel_regs.py" lineno="103" time="0.002730131149291992" sim_time_ns="170.00000000000006" ratio_time="62268.0709108375" />
+    <testcase name="test_retry_reset" classname="test_dac_channel_regs" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_dac_channel_regs/test_dac_channel_regs.py" lineno="124" time="0.00165557861328125" sim_time_ns="150.0" ratio_time="90602.76497695853" />
+  </testsuite>
+</testsuites>

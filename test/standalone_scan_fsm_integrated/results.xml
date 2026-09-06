@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1788682183" />
+    <testcase name="test_preload_loads_initial_codes" classname="test_scan_fsm_integrated" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm_integrated/test_scan_fsm_integrated.py" lineno="75" time="0.002814054489135742" sim_time_ns="120.0" ratio_time="42643.097517580274" />
+    <testcase name="test_full_scan_all_lock_immediately" classname="test_scan_fsm_integrated" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm_integrated/test_scan_fsm_integrated.py" lineno="86" time="0.021582841873168945" sim_time_ns="930.0" ratio_time="43089.78425849213" />
+    <testcase name="test_full_scan_with_one_retry" classname="test_scan_fsm_integrated" file="/home/sidh/flux_bias_sequencer/tt_project/test/standalone_scan_fsm_integrated/test_scan_fsm_integrated.py" lineno="104" time="0.015270233154296875" sim_time_ns="1270.0" ratio_time="83168.34374219335" />
+  </testsuite>
+</testsuites>
