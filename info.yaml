@@ -1,9 +1,9 @@
 # Tiny Tapeout project information
 project:
-  title:        ""      # Project title
+  title:        "Flux-Bias Sequencer"      # Project title
   author:       "Siddharth Bhat, Soham Bhattacharya"      # Your name
   discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  ""      # One line description of what your project does
+  description:  "Digital sequencer for cryo-CMOS qubit flux-bias control: cycles through 4 channels, shifts DAC codes over a serial bus, and locks setpoints using comparator feedback with automatic retry."      # One line description of what your project does
   language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
   clock_hz:     0       # Clock frequency in Hz (or 0 if not applicable)
 
@@ -27,9 +27,9 @@ project:
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
   # Inputs
-  ui[0]: ""
-  ui[1]: ""
-  ui[2]: ""
+  ui[0]: "comparator_fb0"
+  ui[1]: "comparator_fb1"
+  ui[2]: "start_scan"
   ui[3]: ""
   ui[4]: ""
   ui[5]: ""
@@ -37,19 +37,19 @@ pinout:
   ui[7]: ""
 
   # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
-  uo[6]: ""
+  uo[0]: "SCLK"
+  uo[1]: "MOSI"
+  uo[2]: "CS"
+  uo[3]: "ch_id0"
+  uo[4]: "ch_id1"
+  uo[5]: "scan_complete"
+  uo[6]: "lock_flag"
   uo[7]: ""
 
   # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
+  uio[0]: "cfg_data0"
+  uio[1]: "cfg_data1"
+  uio[2]: "cfg_load_en"
   uio[3]: ""
   uio[4]: ""
   uio[5]: ""
