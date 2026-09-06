@@ -1,5 +1,12 @@
-# Flux-Bias Sequencer - full top-level test (real chip pins)
+# Flux-Bias Sequencer - full top-level test (real chip pins only)
 # SPDX-License-Identifier: Apache-2.0
+#
+# This test uses ONLY the chip's real pins (ui_in, uo_out, uio_in/out) -
+# no internal hierarchy access (e.g. dut.user_project.fsm_inst.*).
+# This is required so the exact same test works for both RTL simulation
+# and gate-level (post-synthesis netlist) simulation, where internal
+# signal names no longer exist after synthesis flattens the design into
+# standard cells.
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge, ClockCycles, ReadOnly, NextTimeStep
@@ -24,32 +31,38 @@ async def load_config(dut, payload_48bit):
     with uio_in[2] (cfg_load_en) held high."""
     for i in range(24):
         chunk = (payload_48bit >> (46 - i * 2)) & 0b11
-        # uio_in[2]=cfg_load_en=1, uio_in[1:0]=chunk
         dut.uio_in.value = (1 << 2) | chunk
         await RisingEdge(dut.clk)
     dut.uio_in.value = 0
     await ClockCycles(dut.clk, 2)
 
 
-SETTLE_STATE = 3
+async def wait_until_idle(dut, settle_cycles=30):
+    """Waits a fixed, generous number of cycles after config load to let
+    the chip finish its internal PRELOAD sequence (writing the 4 initial
+    codes into the register file) before a scan is triggered. This is a
+    fixed margin rather than a pin-detected condition, since there is no
+    dedicated 'preload done' pin exposed at the top level."""
+    await ClockCycles(dut.clk, settle_cycles)
+
 
 async def fake_comparator(dut, fail_once_on_channel=None):
-    """Watches the FSM's internal state (via hierarchical access) for
-    entry into SETTLE - this fires exactly once per channel, right after
-    that channel's serial transfer finishes, with no shared-bus timing
-    ambiguity (unlike watching cs_n directly)."""
+    """Watches uo_out[2] (CS, active-low) for the falling-to-rising
+    transition that marks the end of a channel's serial transfer, then
+    drives ui_in[1:0] (comparator feedback) accordingly. Pin-only - safe
+    for both RTL and gate-level simulation."""
     failed_channels = set()
-    prev_state = -1
+    prev_cs_n = 1
 
     while True:
         await RisingEdge(dut.clk)
         await ReadOnly()
-        fsm_state = int(dut.user_project.fsm_inst.state.value)
-        ch = int(dut.user_project.fsm_inst.ch_count.value)
-        sent_code = int(dut.user_project.fsm_inst.reg_code_out.value)
+        uo = int(dut.uo_out.value)
+        cs_n = (uo >> 2) & 0x1
+        ch = (uo >> 3) & 0b11
 
-        transfer_just_finished = (fsm_state == SETTLE_STATE and prev_state != SETTLE_STATE)
-        prev_state = fsm_state
+        transfer_just_finished = (prev_cs_n == 0 and cs_n == 1)
+        prev_cs_n = cs_n
 
         await NextTimeStep()
 
@@ -61,66 +74,84 @@ async def fake_comparator(dut, fail_once_on_channel=None):
                     and ch not in failed_channels:
                 new_status = 0b01  # too-low, force a retry
                 failed_channels.add(ch)
-                result = "TOO-LOW, retrying"
             else:
                 new_status = 0b00  # lock
-                result = "LOCKED"
 
-            dut._log.info(f"  >> Channel {ch}: sent DAC code 0x{sent_code:02X}  ->  {result}")
             dut.ui_in.value = start_bit | new_status
+
+
+async def fake_comparator_always_fail(dut, fail_channel):
+    """Like fake_comparator, but one specific channel ALWAYS fails
+    (too-high), to exercise the give-up-after-retries path."""
+    while True:
+        await RisingEdge(dut.clk)
+        await ReadOnly()
+        uo = int(dut.uo_out.value)
+        cs_n = (uo >> 2) & 0x1
+        ch = (uo >> 3) & 0b11
+
+        transfer_just_finished = (getattr(fake_comparator_always_fail, "_prev_cs_n", 1) == 0 and cs_n == 1)
+        fake_comparator_always_fail._prev_cs_n = cs_n
+
+        await NextTimeStep()
+
+        if transfer_just_finished:
+            current_ui = int(dut.ui_in.value)
+            start_bit = current_ui & 0b100
+
+            if ch == fail_channel:
+                new_status = 0b10  # too-high, never locks
+            else:
+                new_status = 0b00
+
+            dut.ui_in.value = start_bit | new_status
+
+
+async def run_scan_and_wait_for_complete(dut, timeout_cycles=400):
+    """Pulses start_scan (ui_in[2]) and waits for scan_complete (uo_out[5])
+    to pulse. Returns the final lock_flag (uo_out[6]) value."""
+    current_ui = int(dut.ui_in.value)
+    dut.ui_in.value = current_ui | 0b100
+    await RisingEdge(dut.clk)
+    dut.ui_in.value = int(dut.ui_in.value) & ~0b100
+
+    for _ in range(timeout_cycles):
+        await RisingEdge(dut.clk)
+        await ReadOnly()
+        uo = int(dut.uo_out.value)
+        scan_complete = (uo >> 5) & 0x1
+        lock_flag = (uo >> 6) & 0x1
+        if scan_complete:
+            await NextTimeStep()
+            return lock_flag
+        await NextTimeStep()
+
+    assert False, f"scan_complete never pulsed within {timeout_cycles} cycles"
 
 
 @cocotb.test()
 async def test_config_load_and_full_scan(dut):
-    dut._log.info("Start full top-level test")
+    dut._log.info("Start: config load + full scan, all channels lock immediately")
 
     clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
 
     await reset_dut(dut)
 
-    # Load config: 4 initial codes, lock_window (unused downstream), step_size
     payload = build_payload(0x10, 0x20, 0x30, 0x40, 0x0F, 0x05)
     await load_config(dut, payload)
-    dut._log.info("Config loaded")
+    await wait_until_idle(dut)
 
-    # Wait for the FSM to leave PRELOAD and settle in IDLE before triggering
-    for _ in range(30):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        fsm_state = int(dut.user_project.fsm_inst.state.value)
-        await NextTimeStep()
-        if fsm_state == 0:  # IDLE
-            break
-
-    # Start the fake comparator watching the live SPI bus
     cocotb.start_soon(fake_comparator(dut, fail_once_on_channel=None))
 
-    # Pulse start_scan (ui_in[2]), keep comparator bits at 0 initially
-    dut.ui_in.value = 0b100
-    await RisingEdge(dut.clk)
-    dut.ui_in.value = 0b000
-
-    # Watch uo_out[5] (scan_complete) for up to 200 cycles
-    scan_complete_seen = False
-    for i in range(200):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        uo = int(dut.uo_out.value)
-        scan_complete = (uo >> 5) & 0x1
-        if scan_complete:
-            scan_complete_seen = True
-            lock_flag = (uo >> 6) & 0x1
-            dut._log.info(f"Scan complete! Final channel locked: {bool(lock_flag)}")
-            break
-        await NextTimeStep()
-
-    assert scan_complete_seen, "scan_complete never pulsed within 200 cycles"
+    final_lock = await run_scan_and_wait_for_complete(dut)
+    dut._log.info(f"Scan complete. Final channel locked: {bool(final_lock)}")
+    assert final_lock == 1, "expected final channel to be locked"
 
 
 @cocotb.test()
 async def test_scan_with_retry_on_channel(dut):
-    dut._log.info("Start retry test")
+    dut._log.info("Start: scan with one forced retry")
 
     clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
@@ -129,42 +160,19 @@ async def test_scan_with_retry_on_channel(dut):
 
     payload = build_payload(0x11, 0x22, 0x33, 0x44, 0x0F, 0x08)
     await load_config(dut, payload)
-
-    # Wait for the FSM to leave PRELOAD and settle in IDLE before triggering
-    for _ in range(30):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        fsm_state = int(dut.user_project.fsm_inst.state.value)
-        await NextTimeStep()
-        if fsm_state == 0:  # IDLE
-            break
+    await wait_until_idle(dut)
 
     # channel 1 fails once before locking
     cocotb.start_soon(fake_comparator(dut, fail_once_on_channel=1))
 
-    dut.ui_in.value = 0b100
-    await RisingEdge(dut.clk)
-    dut.ui_in.value = 0b000
-
-    scan_complete_seen = False
-    for _ in range(300):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        uo = int(dut.uo_out.value)
-        scan_complete = (uo >> 5) & 0x1
-        if scan_complete:
-            scan_complete_seen = True
-            break
-        await NextTimeStep()
-
-    assert scan_complete_seen, "scan_complete never pulsed (retry path)"
+    final_lock = await run_scan_and_wait_for_complete(dut)
+    dut._log.info(f"Scan complete (retry path). Final channel locked: {bool(final_lock)}")
+    assert final_lock == 1, "expected final channel to be locked after retry"
 
 
 @cocotb.test()
 async def test_never_locks_does_not_stall(dut):
-    """A channel that always fails (never locks) must eventually give up
-    (after 4 retries) and move on, not stall the whole scan forever."""
-    dut._log.info("Start never-locks test")
+    dut._log.info("Start: never-locks-does-not-stall")
 
     clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
@@ -173,70 +181,25 @@ async def test_never_locks_does_not_stall(dut):
 
     payload = build_payload(0x50, 0x60, 0x70, 0x80, 0x0F, 0x05)
     await load_config(dut, payload)
+    await wait_until_idle(dut)
 
-    # Wait for FSM to settle in IDLE before triggering
-    for _ in range(30):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        fsm_state = int(dut.user_project.fsm_inst.state.value)
-        await NextTimeStep()
-        if fsm_state == 0:
-            break
+    # reset the static state on the helper function between test runs
+    if hasattr(fake_comparator_always_fail, "_prev_cs_n"):
+        del fake_comparator_always_fail._prev_cs_n
 
-    # Background task: channel 0 ALWAYS fails (too-high), every other channel locks
-    async def always_fail_on_channel_0():
-        prev_state = -1
-        while True:
-            await RisingEdge(dut.clk)
-            await ReadOnly()
-            fsm_state = int(dut.user_project.fsm_inst.state.value)
-            ch = int(dut.user_project.fsm_inst.ch_count.value)
-            sent_code = int(dut.user_project.fsm_inst.reg_code_out.value)
-            transfer_just_finished = (fsm_state == SETTLE_STATE and prev_state != SETTLE_STATE)
-            prev_state = fsm_state
-            await NextTimeStep()
+    # channel 0 always fails (too-high), every other channel locks
+    cocotb.start_soon(fake_comparator_always_fail(dut, fail_channel=0))
 
-            if transfer_just_finished:
-                current_ui = int(dut.ui_in.value)
-                start_bit = current_ui & 0b100
-                if ch == 0:
-                    new_status = 0b10  # too-high, never locks
-                    result = "TOO-HIGH (never locks)"
-                else:
-                    new_status = 0b00
-                    result = "LOCKED"
-                dut._log.info(f"  >> Channel {ch}: sent DAC code 0x{sent_code:02X}  ->  {result}")
-                dut.ui_in.value = start_bit | new_status
-
-    cocotb.start_soon(always_fail_on_channel_0())
-
-    dut.ui_in.value = 0b100
-    await RisingEdge(dut.clk)
-    dut.ui_in.value = 0b000
-
-    scan_complete_seen = False
-    for _ in range(400):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        uo = int(dut.uo_out.value)
-        scan_complete = (uo >> 5) & 0x1
-        if scan_complete:
-            scan_complete_seen = True
-            lock_flag = (uo >> 6) & 0x1
-            dut._log.info(f"Scan complete despite channel 0 never locking. "
-                          f"Final (channel 3) locked: {bool(lock_flag)}")
-            break
-        await NextTimeStep()
-
-    assert scan_complete_seen, \
-        "FSM stalled: scan never completed when a channel never locks"
+    final_lock = await run_scan_and_wait_for_complete(dut, timeout_cycles=400)
+    dut._log.info("Scan completed despite channel 0 never locking "
+                  f"(sequencer did not stall). Final channel locked: {bool(final_lock)}")
+    # scan_complete pulsing at all (without timing out) IS the pass condition here -
+    # the whole point is that a channel that never locks must not stall the scan.
 
 
 @cocotb.test()
 async def test_reset_mid_scan(dut):
-    """Asserting reset partway through a scan must immediately force the
-    chip back to a clean idle state, not leave it stuck mid-sequence."""
-    dut._log.info("Start reset-mid-scan test")
+    dut._log.info("Start: reset mid-scan")
 
     clock = Clock(dut.clk, 10, unit="ns")
     cocotb.start_soon(clock.start())
@@ -245,34 +208,30 @@ async def test_reset_mid_scan(dut):
 
     payload = build_payload(0x10, 0x20, 0x30, 0x40, 0x0F, 0x05)
     await load_config(dut, payload)
+    await wait_until_idle(dut)
 
-    for _ in range(30):
-        await RisingEdge(dut.clk)
-        await ReadOnly()
-        fsm_state = int(dut.user_project.fsm_inst.state.value)
-        await NextTimeStep()
-        if fsm_state == 0:
-            break
-
-    dut.ui_in.value = 0b100
+    current_ui = int(dut.ui_in.value)
+    dut.ui_in.value = current_ui | 0b100
     await RisingEdge(dut.clk)
-    dut.ui_in.value = 0b000
+    dut.ui_in.value = int(dut.ui_in.value) & ~0b100
 
-    # Let it run partway into the scan (a handful of cycles, likely mid LOAD_CODE/SETTLE)
+    # let it run partway into the scan
     await ClockCycles(dut.clk, 10)
 
-    # Assert reset mid-scan
+    # assert reset mid-scan
     dut.rst_n.value = 0
     await ClockCycles(dut.clk, 3)
 
-    fsm_state_after_reset = int(dut.user_project.fsm_inst.state.value)
-    fsm_ch_after_reset = int(dut.user_project.fsm_inst.ch_count.value)
+    # after reset, CS should be deselected (high) and scan_complete/lock_flag low -
+    # a pin-only proxy for "back to a clean idle state"
+    await ReadOnly()
+    uo = int(dut.uo_out.value)
+    cs_n = (uo >> 2) & 0x1
+    scan_complete = (uo >> 5) & 0x1
+    await NextTimeStep()
 
-    # PRELOAD (state 9) is the correct post-reset state per scan_fsm.v design
-    assert fsm_state_after_reset == 9, \
-        f"Expected PRELOAD (9) immediately after reset, got state={fsm_state_after_reset}"
-    assert fsm_ch_after_reset == 0, \
-        f"Expected channel counter cleared to 0 after reset, got {fsm_ch_after_reset}"
+    assert cs_n == 1, f"expected CS deselected (high) after reset, got cs_n={cs_n}"
+    assert scan_complete == 0, "expected scan_complete low immediately after reset"
 
-    dut._log.info("Reset mid-scan correctly forced FSM back to PRELOAD, channel counter cleared")
+    dut._log.info("Reset mid-scan correctly forced chip back to a clean idle state")
     dut.rst_n.value = 1
