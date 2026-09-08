@@ -24,7 +24,7 @@ module config_loader (
 );
 
     localparam TOTAL_BITS  = 48;
-    localparam TOTAL_STEPS = TOTAL_BITS / 2;   // 24 cycles at 2 bits/cycle
+    localparam [4:0] TOTAL_STEPS = TOTAL_BITS / 2;   // 24 cycles at 2 bits/cycle
 
     reg [47:0] shift_reg;
     reg [4:0]  step_count;      // counts 0..24

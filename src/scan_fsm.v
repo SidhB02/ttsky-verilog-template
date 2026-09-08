@@ -92,7 +92,8 @@ module scan_fsm (
     // ------------------------------------------------------------
     // dac_serializer instance
     // ------------------------------------------------------------
-    wire ser_ready, ser_done;
+    wire ser_ready, ser_done;  // ser_ready intentionally unread below
+    wire _unused_ser_ready = ser_ready;
     wire ser_start;
 
     dac_serializer ser_inst (
@@ -295,7 +296,7 @@ module scan_fsm (
     // ------------------------------------------------------------
     // Serializer start pulse: fires once, on entry into LOAD_CODE
     // ------------------------------------------------------------
-    reg prev_state_ss;
+    reg [3:0] prev_state_ss;
     assign ser_start = (state == LOAD_CODE) && (prev_state_ss != LOAD_CODE);
 
     always @(posedge clk or negedge rst_n) begin
